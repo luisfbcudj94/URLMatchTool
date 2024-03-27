@@ -16,6 +16,7 @@ using CsvHelper.Configuration;
 using OpenQA.Selenium.Chrome;
 using System.Security;
 using System.Reflection;
+using SeleniumUndetectedChromeDriver;
 
 namespace Tool
 {
@@ -61,10 +62,9 @@ namespace Tool
 
 
 
-
-                ChromeDriverService service = SetServiceDriver();
-                ChromeOptions options = SetWebDriver();
-                ChromeDriver driver = CreateDriver(service, options);
+                //ChromeDriverService service = SetServiceDriver();
+                //ChromeOptions options = SetWebDriver();
+                UndetectedChromeDriver driver = await CreateDriver(hideBrowser);
 
 
                 foreach (var input in inputs)
@@ -97,9 +97,11 @@ namespace Tool
 
                             driver.Quit();
 
-                            service = SetServiceDriver();
-                            options = SetWebDriver();
-                            driver = CreateDriver(service, options);
+                            //service = SetServiceDriver();
+                            //options = SetWebDriver();
+                            //driver = CreateDriver(service, options);
+                            driver = await CreateDriver(hideBrowser);
+
 
                             await FetchUrlProcessor(input.RedirectionURL, iteration, driver, csvFilePath, timeout);
 
@@ -194,9 +196,10 @@ namespace Tool
 
             return service;
         }
-        static ChromeDriver CreateDriver(ChromeDriverService service, ChromeOptions options)
+        static async Task<UndetectedChromeDriver> CreateDriver(bool hideBrowser)
         {
-            var driver = new ChromeDriver(service, options);
+            var driver = UndetectedChromeDriver.Create(driverExecutablePath: await new ChromeDriverInstaller().Auto(), headless: hideBrowser);
+            //var driver = new ChromeDriver(service, options);
 
             return driver;
         }
