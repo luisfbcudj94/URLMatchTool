@@ -11,9 +11,10 @@ using Newtonsoft.Json.Linq;
 using OpenQA.Selenium.DevTools;
 using OpenQA.Selenium.Support.UI;
 using OpenQA.Selenium;
-using SeleniumUndetectedChromeDriver;
 using CsvHelper;
 using CsvHelper.Configuration;
+using OpenQA.Selenium.Chrome;
+using System.Security;
 
 namespace Tool
 {
@@ -57,8 +58,34 @@ namespace Tool
                 var csvFilePath = $@"_result.csv";
                 Console.WriteLine($"Writing output to: {csvFilePath}\n");
 
+                ChromeOptions options = new ChromeOptions();
+                options.AddArgument("--headless");
+                options.AddArgument("--disable-web-security");
+                options.AddArgument("--allow-running-insecure-content");
+                options.AddArgument("--ignore-certificate-errors-spki-list");
+                options.AddArgument("--disable-gpu");
+                options.AddArgument("--disable-extensions");
+                options.AddArgument("--disable-notifications");
+                options.AddArgument("--disable-popup-blocking");
+                options.AddArgument("--enable-chrome-browser-cloud-management");
+                options.AddArgument("--force-permission-policy-unload-default-enabled");
+                options.AddArgument("--report-vp9-as-an-unsupported-mime-type");
+                options.AddArgument("--allow-failed-policy-fetch-for-test");
+                options.AddArgument("--allow-insecure-localhost");
+                options.AddArgument("--disable-cookie-encryption");
+                options.AddArgument("--enable-experimental-cookie-features");
+                options.AddArgument("--webview-enable-modern-cookie-same-site");
+                options.AddArgument("--bound-session-cookie-rotation-result");
+                options.AddArgument("--test-third-party-cookie-phaseout");
+                options.AddArgument("--disable-logging");
+                options.AddArgument("--enable-automation");
+
+                ChromeDriverService service = ChromeDriverService.CreateDefaultService();
+                service.HideCommandPromptWindow = true;
+
+
                 // call this function under parallel for each
-                using (var driver = UndetectedChromeDriver.Create(driverExecutablePath: await new ChromeDriverInstaller().Auto(), headless: hideBrowser))
+                using (ChromeDriver driver = new ChromeDriver(service, options))
                 {
                     foreach (var input in inputs)
                     {
@@ -115,8 +142,9 @@ namespace Tool
 
             Console.WriteLine("Processing complete.");
         }
-        static async Task FetchUrlProcessor(string inputUrl, int index, UndetectedChromeDriver driver, string filePath, DateTime timeout)
+        static async Task FetchUrlProcessor(string inputUrl, int index, ChromeDriver driver, string filePath, DateTime timeout)
         {
+
             List<JToken> responseList = [];
 
             DevToolsSession session = ((IDevTools)driver).GetDevToolsSession();
