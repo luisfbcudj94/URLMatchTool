@@ -66,44 +66,64 @@ namespace Tool
                 ChromeOptions options = SetWebDriver();
                 ChromeDriver driver = CreateDriver(service, options);
 
-                  
+
                 foreach (var input in inputs)
                 {
                     // reset redirect url fro  previous run
                     Redirects = [];
 
-                    // set Destination url
-                    DestinationUri = new Uri(input.DestinationURL);
-
-                    // log progress
-                    Console.Write($"\n{iteration,4:0}. Testing redirection for: {DestinationUri.Host,-50}");
-
-                    // set timeout
-                    var timeout = DateTime.Now.AddSeconds(timeoutSeconds);
-
-                    try
-                    {
-                        // call the function to test the url
-                        await FetchUrlProcessor(input.RedirectionURL, iteration, driver, csvFilePath, timeout);
-                    }
-                    catch (Exception ex)
-                    {
-                        //Console.WriteLine("\nTrying to reconnect with Chrome WebDriver.");
-
-                        driver.Quit();
-
-                        service = SetServiceDriver();
-                        options = SetWebDriver();
-                        driver = CreateDriver(service, options);
-
-                        await FetchUrlProcessor(input.RedirectionURL, iteration, driver, csvFilePath, timeout);
-
-                        //Console.WriteLine("\nReconnection attempt completed.");
-                    }
                     
 
-                    // inrement the iterator
-                    iteration++;
+                    // set Destination url
+                    if (!string.IsNullOrEmpty(input.DestinationURL) && Uri.IsWellFormedUriString(input.DestinationURL, UriKind.Absolute))
+                    {
+
+                        DestinationUri = new Uri(input.DestinationURL);
+                        // log progress
+                        Console.Write($"\n{iteration,4:0}. Testing redirection for: {DestinationUri.Host,-50}");
+
+                        // set timeout
+                        var timeout = DateTime.Now.AddSeconds(timeoutSeconds);
+
+                        try
+                        {
+
+                            // call the function to test the url
+                            await FetchUrlProcessor(input.RedirectionURL, iteration, driver, csvFilePath, timeout);
+                        }
+                        catch (Exception ex)
+                        {
+                            //Console.WriteLine("\nTrying to reconnect with Chrome WebDriver.");
+
+                            driver.Quit();
+
+                            service = SetServiceDriver();
+                            options = SetWebDriver();
+                            driver = CreateDriver(service, options);
+
+                            await FetchUrlProcessor(input.RedirectionURL, iteration, driver, csvFilePath, timeout);
+
+                            //Console.WriteLine("\nReconnection attempt completed.");
+                        }
+
+
+                        // inrement the iterator
+                        iteration++;
+                    }
+                    else
+                    {
+                        Console.Write($"\n{iteration,4:0}. Testing redirection for: {input.DestinationURL,-50}");
+                        Console.Write("URL format incorrect");
+                        var result = new RedirectionOutputModel()
+                        {
+                            Index = iteration,
+                            RedirectionURL = input.RedirectionURL,
+                            DestinationURL = input.DestinationURL,
+                            Status = "URL format incorrect"
+                        };
+                        WriteToCsv(iteration, csvFilePath, result);
+                        iteration++;
+                    }
                 }
 
                 // Close the browser
@@ -207,7 +227,6 @@ namespace Tool
                 Thread.Sleep(1200);
 
                 driver.Navigate().GoToUrl(inputUrl);
-
                 // Add a delay to ensure the page loads completely after redirection
                 Thread.Sleep(800);
 
@@ -303,11 +322,15 @@ namespace Tool
                 Console.WriteLine($"Timeout error occurred: {ex.Message}");
             }
             catch (Exception ex)
-            {
-                Console.Write("Unprocessed");
+            { 
                 //Console.WriteLine("\nAn error occurred: " + ex.Message);
 
-                result.Status = "Unprocessed";
+                if (string.IsNullOrEmpty(result.Status))
+                {
+                    Console.Write("Unprocessed");
+                    result.Status = "Unprocessed";
+                }
+                
                 WriteToCsv(index, filePath, result);
             }
 
@@ -342,6 +365,7 @@ namespace Tool
                                 session.DevToolsEventReceived -= OnDevToolsEventReceived;
                             }
                         }
+
                     }
                 }
             }
