@@ -1,12 +1,7 @@
 ﻿using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
-using System.IO;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
 using OpenQA.Selenium.DevTools;
 using OpenQA.Selenium.Support.UI;
@@ -14,10 +9,7 @@ using OpenQA.Selenium;
 using CsvHelper;
 using CsvHelper.Configuration;
 using OpenQA.Selenium.Chrome;
-using System.Security;
-using System.Reflection;
 using SeleniumUndetectedChromeDriver;
-using OpenQA.Selenium.Interactions;
 
 namespace Tool
 {
@@ -90,7 +82,7 @@ namespace Tool
                     else
                     {
                         Console.Write($"\n{iteration,4:0}. Testing redirection for: {input.DestinationURL,-50}");
-                        Console.Write("URL format incorrect\n");
+                        Console.Write("URL format incorrect");
                         var result = new RedirectionOutputModel()
                         {
                             Index = iteration,
@@ -300,7 +292,6 @@ namespace Tool
                     Console.Write("Trying");
                     // Trying again
                     await StartProcess(true, inputUrl, index, filePath, timeout, true, numberRetries);
-                    
                 }
                
             }
