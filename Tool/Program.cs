@@ -17,6 +17,7 @@ using OpenQA.Selenium.Chrome;
 using System.Security;
 using System.Reflection;
 using SeleniumUndetectedChromeDriver;
+using OpenQA.Selenium.Interactions;
 
 namespace Tool
 {
@@ -27,6 +28,8 @@ namespace Tool
         // list to capture redirects
         private static List<(string Url, int StatusCode)> Redirects = [];
         private static Uri DestinationUri;
+
+        private static UndetectedChromeDriver? Driver;
 
         private const int HttpOkStatus = 200;
         private const int timeoutSeconds = 15;
@@ -60,62 +63,34 @@ namespace Tool
                 var csvFilePath = $@"_result.csv";
                 Console.WriteLine($"Writing output to: {csvFilePath}\n");
 
-
-
-                //ChromeDriverService service = SetServiceDriver();
-                //ChromeOptions options = SetWebDriver();
-                UndetectedChromeDriver driver = await CreateDriver(hideBrowser);
-
-
+                await CreateDriver(hideBrowser);
+                
                 foreach (var input in inputs)
                 {
                     // reset redirect url fro  previous run
                     Redirects = [];
 
-                    
-
-                    // set Destination url
+                    // validate URL format
                     if (!string.IsNullOrEmpty(input.DestinationURL) && Uri.IsWellFormedUriString(input.DestinationURL, UriKind.Absolute))
                     {
-
+                        // set Destination url
                         DestinationUri = new Uri(input.DestinationURL);
+
                         // log progress
                         Console.Write($"\n{iteration,4:0}. Testing redirection for: {DestinationUri.Host,-50}");
 
                         // set timeout
                         var timeout = DateTime.Now.AddSeconds(timeoutSeconds);
 
-                        try
-                        {
+                        int numberRetries = 0;
 
-                            // call the function to test the url
-                            await FetchUrlProcessor(input.RedirectionURL, iteration, driver, csvFilePath, timeout);
-                        }
-                        catch (Exception ex)
-                        {
-                            //Console.WriteLine("\nTrying to reconnect with Chrome WebDriver.");
-
-                            driver.Quit();
-
-                            //service = SetServiceDriver();
-                            //options = SetWebDriver();
-                            //driver = CreateDriver(service, options);
-                            driver = await CreateDriver(hideBrowser);
-
-
-                            await FetchUrlProcessor(input.RedirectionURL, iteration, driver, csvFilePath, timeout);
-
-                            //Console.WriteLine("\nReconnection attempt completed.");
-                        }
-
-
-                        // inrement the iterator
-                        iteration++;
+                        // call the function to test the url
+                        await StartProcess(hideBrowser, input.RedirectionURL, iteration, csvFilePath, timeout, false, numberRetries);
                     }
                     else
                     {
                         Console.Write($"\n{iteration,4:0}. Testing redirection for: {input.DestinationURL,-50}");
-                        Console.Write("URL format incorrect");
+                        Console.Write("URL format incorrect\n");
                         var result = new RedirectionOutputModel()
                         {
                             Index = iteration,
@@ -124,13 +99,14 @@ namespace Tool
                             Status = "URL format incorrect"
                         };
                         WriteToCsv(iteration, csvFilePath, result);
-                        iteration++;
                     }
+
+                    // increment the iterator
+                    iteration++;
                 }
 
                 // Close the browser
-                driver.Quit();
-                
+                Driver.Quit();
 
                 Console.WriteLine($"\n\nResults are saved to {csvFilePath}");
 
@@ -162,49 +138,47 @@ namespace Tool
 
             Console.WriteLine("Processing complete.");
         }
-        static ChromeOptions SetWebDriver()
-        {
-            ChromeOptions options = new ChromeOptions();
-            options.AddArgument("--headless");
-            options.AddArgument("--disable-web-security");
-            options.AddArgument("--allow-running-insecure-content");
-            options.AddArgument("--ignore-certificate-errors-spki-list");
-            options.AddArgument("--disable-gpu");
-            options.AddArgument("--disable-extensions");
-            options.AddArgument("--disable-notifications");
-            options.AddArgument("--disable-popup-blocking");
-            options.AddArgument("--enable-chrome-browser-cloud-management");
-            options.AddArgument("--force-permission-policy-unload-default-enabled");
-            options.AddArgument("--report-vp9-as-an-unsupported-mime-type");
-            options.AddArgument("--allow-failed-policy-fetch-for-test");
-            options.AddArgument("--allow-insecure-localhost");
-            options.AddArgument("--disable-cookie-encryption");
-            options.AddArgument("--enable-experimental-cookie-features");
-            options.AddArgument("--webview-enable-modern-cookie-same-site");
-            options.AddArgument("--bound-session-cookie-rotation-result");
-            options.AddArgument("--test-third-party-cookie-phaseout");
-            options.AddArgument("--disable-logging");
-            options.AddArgument("--enable-automation");
 
-            return options;
+        // create a new driver
+        static async Task CreateDriver(bool hideBrowser)
+        {
+            // options to prevent browser errors.
+            ChromeOptions _options = new ChromeOptions();
+            _options.AddArgument("--log-level=3");
+            _options.AddArgument("--disable-features=IsolateOrigins,site-per-process");
+            _options.AddArgument("disable-features=NetworkService");
+            _options.AddArgument("--disable-web-security");
+            _options.AddArgument("--allow-running-insecure-content");
+            _options.AddArgument("--disable-extensions");
+            _options.AddArgument("--ignore-certificate-errors");
+            _options.AddArgument("--disable-notifications");
+            _options.AddArgument("--disable-popup-blocking");
+            _options.AddArgument("--enable-chrome-browser-cloud-management");
+            _options.AddArgument("--disable-usb-device-redirector");
+
+            // hide information about the created driver, only display important information for the user.
+            Action<ChromeDriverService> configureService = service =>
+            {
+                service.SuppressInitialDiagnosticInformation = true;
+                service.HideCommandPromptWindow = true;
+            };
+
+            Driver = UndetectedChromeDriver.Create(driverExecutablePath: await new ChromeDriverInstaller().Auto(), headless: hideBrowser, options: _options, configureService: configureService);
+
+            await Task.Delay(1000);
         }
 
-        static ChromeDriverService SetServiceDriver()
+        static async Task StartProcess(bool hideBrowser, string inputUrl, int index, string filePath, DateTime timeout, bool createdDriver, int numberRetries)
         {
-            ChromeDriverService service = ChromeDriverService.CreateDefaultService();
-            service.HideCommandPromptWindow = true;
-
-            return service;
-        }
-        static async Task<UndetectedChromeDriver> CreateDriver(bool hideBrowser)
-        {
-            var driver = UndetectedChromeDriver.Create(driverExecutablePath: await new ChromeDriverInstaller().Auto(), headless: hideBrowser);
-            //var driver = new ChromeDriver(service, options);
-
-            return driver;
+            if (createdDriver)
+            {
+                await CreateDriver(hideBrowser);
+                Console.Write($"\n{index,4:0}. Testing redirection for: {DestinationUri.Host,-50}");
+            }
+            await FetchUrlProcessor(hideBrowser, inputUrl, index, filePath, timeout, numberRetries);
         }
 
-        static async Task FetchUrlProcessor(string inputUrl, int index, ChromeDriver driver, string filePath, DateTime timeout)
+        static async Task FetchUrlProcessor(bool hideBrowser, string inputUrl, int index, string filePath, DateTime timeout, int numberRetries)
         {
             // Output result
             var result = new RedirectionOutputModel()
@@ -217,52 +191,41 @@ namespace Tool
 
             List<JToken> responseList = [];
 
-            DevToolsSession session = ((IDevTools)driver).GetDevToolsSession();
+            DevToolsSession session = ((IDevTools)Driver).GetDevToolsSession();
             await session.Domains.Network.EnableNetwork();
+
             session.DevToolsEventReceived += OnDevToolsEventReceived;
+
+            var sessionId = session.ActiveSessionId;
 
             try
             {
                 // Set the page load timeout
-                driver.Manage().Timeouts().ImplicitWait = TimeSpan.FromSeconds(150);
+                Driver.Manage().Timeouts().ImplicitWait = TimeSpan.FromSeconds(150);
 
                 // Add a delay to ensure the page loads completely after redirection
-                Thread.Sleep(1200);
 
-                driver.Navigate().GoToUrl(inputUrl);
-                // Add a delay to ensure the page loads completely after redirection
-                Thread.Sleep(800);
+                Driver.Navigate().GoToUrl(inputUrl);
+                await Task.Delay(3000);
 
                 // Wait until the page is completely loaded
-                WebDriverWait wait = new(driver, TimeSpan.FromSeconds(30));
-                wait.Until(driver => (driver as IJavaScriptExecutor).ExecuteScript("return document.readyState").Equals("complete"));
-
-                // Add a delay to ensure the page loads completely after redirection
-                Thread.Sleep(800);
-
-
+                WebDriverWait wait = new(Driver, TimeSpan.FromSeconds(30));
 
                 // Record the initial URL
-                Redirects.Add((driver.Url, 200));
+                Redirects.Add((Driver.Url, 200));
 
                 // Follow redirects until the final destination is reached
                 while (true)
                 {
+
                     // Get the latest redirected url
                     var (Url, StatusCode) = Redirects.LastOrDefault();
                     Uri redirectedUri = new(Url);
-
                     // Check if there is a redirect
                     if (redirectedUri.Host != DestinationUri.Host && StatusCode != HttpOkStatus)
                     {
-                        // Add a delay to ensure the page loads completely after redirection
-                        Thread.Sleep(1000);
-
                         // Wait until the page is completely loaded
                         wait.Until(driver => (driver as IJavaScriptExecutor).ExecuteScript("return document.readyState").Equals("complete"));
-
-                        // Add a delay to ensure the page loads completely after redirection
-                        Thread.Sleep(1000);
 
                         // Check if the timeout task has completed
                         if (DateTime.Now > timeout)
@@ -288,31 +251,24 @@ namespace Tool
                             WriteToCsv(index, filePath, result);
                             break;
                         }
-
                         // Navigate to the next URL
-                        driver.Navigate().GoToUrl(driver.Url);
-
-                        // Add a delay to ensure the page loads completely after redirection
-                        Thread.Sleep(1500);
+                        Driver.Navigate().GoToUrl(Driver.Url);
                     }
                     else
                     {
                         // Check if the status code is OK (200) and domain match with destination url
                         var status = redirectedUri.Host == DestinationUri.Host && StatusCode == HttpOkStatus ? "Success" : "Failure";
-
                         // log status
                         Console.Write($"{status}");
 
                         // Join the Item1 values into a comma-separated string
                         string redirects = string.Join("|", Redirects.Select(e => $"{e.Url}|{e.StatusCode}"));
-
                         // set result values
                         result.FinalDomain = redirectedUri.Host;
                         result.Status = status;
                         result.StatusCode = $"{StatusCode}";
                         result.FinalUrl = $"{redirectedUri}";
                         result.Redirects = redirects;
-
                         WriteToCsv(index, filePath, result);
 
                         // No more redirects, break the loop
@@ -324,17 +280,29 @@ namespace Tool
             {
                 Console.WriteLine($"Timeout error occurred: {ex.Message}");
             }
-            catch (Exception ex)
-            { 
-                //Console.WriteLine("\nAn error occurred: " + ex.Message);
-
-                if (string.IsNullOrEmpty(result.Status))
+            catch
+            {
+                numberRetries += 1;
+                // validate if there are still attempts available.
+                if (numberRetries > 1)
                 {
-                    Console.Write("Unprocessed");
-                    result.Status = "Unprocessed";
+                    if (string.IsNullOrEmpty(result.Status))
+                    {
+                        Console.Write($"\n{index,4:0}. Testing redirection for: {DestinationUri.Host,-50}");
+                        Console.Write("Unprocessed\n");
+                        result.Status = "Unprocessed";
+                    }
+                    await CreateDriver(hideBrowser);
+                    WriteToCsv(index, filePath, result);
                 }
-                
-                WriteToCsv(index, filePath, result);
+                else
+                {
+                    Console.Write("Trying\n\n");
+                    // Trying again
+                    await StartProcess(true, inputUrl, index, filePath, timeout, true, numberRetries);
+                    
+                }
+               
             }
 
             void OnDevToolsEventReceived(object sender, DevToolsEventReceivedEventArgs e)
