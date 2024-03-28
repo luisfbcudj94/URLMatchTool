@@ -289,7 +289,7 @@ namespace Tool
                     if (string.IsNullOrEmpty(result.Status))
                     {
                         Console.Write($"\n{index,4:0}. Testing redirection for: {DestinationUri.Host,-50}");
-                        Console.Write("Unprocessed\n");
+                        Console.Write("Unprocessed");
                         result.Status = "Unprocessed";
                     }
                     await CreateDriver(hideBrowser);
@@ -297,7 +297,7 @@ namespace Tool
                 }
                 else
                 {
-                    Console.Write("Trying\n\n");
+                    Console.Write("Trying");
                     // Trying again
                     await StartProcess(true, inputUrl, index, filePath, timeout, true, numberRetries);
                     
