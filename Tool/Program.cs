@@ -284,7 +284,7 @@ namespace Tool
             {
                 numberRetries += 1;
                 // validate if there are still attempts available.
-                if (numberRetries > 1)
+                if (numberRetries > 2)
                 {
                     if (string.IsNullOrEmpty(result.Status))
                     {
