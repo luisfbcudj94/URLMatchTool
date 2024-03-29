@@ -98,7 +98,7 @@ namespace Tool
                 }
 
                 // Close the browser
-                Driver.Quit();
+                Driver?.Quit();
 
                 Console.WriteLine($"\n\nResults are saved to {csvFilePath}");
 
@@ -138,7 +138,6 @@ namespace Tool
             ChromeOptions _options = new ChromeOptions();
             _options.AddArgument("--log-level=3");
             _options.AddArgument("--disable-features=IsolateOrigins,site-per-process");
-            _options.AddArgument("disable-features=NetworkService");
             _options.AddArgument("--disable-web-security");
             _options.AddArgument("--allow-running-insecure-content");
             _options.AddArgument("--disable-extensions");
@@ -274,6 +273,9 @@ namespace Tool
             }
             catch
             {
+                Driver.Quit();
+                await Task.Delay(200);
+
                 numberRetries += 1;
                 // validate if there are still attempts available.
                 if (numberRetries > 2)
@@ -291,7 +293,7 @@ namespace Tool
                 {
                     Console.Write("Trying");
                     // Trying again
-                    await StartProcess(true, inputUrl, index, filePath, timeout, true, numberRetries);
+                    await StartProcess(hideBrowser, inputUrl, index, filePath, timeout, true, numberRetries);
                 }
                
             }
