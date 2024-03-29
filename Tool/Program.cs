@@ -10,11 +10,24 @@ using CsvHelper;
 using CsvHelper.Configuration;
 using OpenQA.Selenium.Chrome;
 using SeleniumUndetectedChromeDriver;
+using System.Runtime.InteropServices;
+using static System.Collections.Specialized.BitVector32;
+using System.Reflection.Metadata;
 
 namespace Tool
 {
     internal class Program
     {
+        // import the SetConsoleCtrlHandler function from the kernel32 library
+        [DllImport("kernel32.dll")]
+        private static extern bool SetConsoleCtrlHandler(ConsoleCtrlDelegate handler, bool add);
+
+        // delegate for the console event handler
+        private delegate bool ConsoleCtrlDelegate(int ctrlType);
+
+        private static ConsoleCtrlDelegate consoleCtrlHandler;
+
+
         public static ConcurrentBag<RedirectionOutputModel> results = [];
 
         // list to capture redirects
@@ -27,6 +40,10 @@ namespace Tool
         private const int timeoutSeconds = 15;
         static async Task Main(string[] args)
         {
+            // register the console event handler
+            consoleCtrlHandler = new ConsoleCtrlDelegate(ConsoleCtrlHandler);
+            SetConsoleCtrlHandler(consoleCtrlHandler, true);
+
             try
             {
                 // Check if the URL file path is provided
@@ -41,6 +58,10 @@ namespace Tool
                 Console.WriteLine("--------------------------\nUrl Redirection Validator\n--------------------------\n");
 
                 int iteration = 1;
+
+                // restart the browser every n iterations to optimize memory.
+                int browserCleanupIteration = 100;
+
                 var inputs = ReadInputFile(args[0]);
 
                 // Check if there are at least two arguments and the second one is either "0" or "1".
@@ -56,9 +77,13 @@ namespace Tool
                 Console.WriteLine($"Writing output to: {csvFilePath}\n");
 
                 await CreateDriver(hideBrowser);
-                
                 foreach (var input in inputs)
                 {
+                    if (iteration % browserCleanupIteration == 0)
+                    {
+                        CloseChromeProcess();
+                    }
+
                     // reset redirect url fro  previous run
                     Redirects = [];
 
@@ -129,6 +154,7 @@ namespace Tool
             }
 
             Console.WriteLine("Processing complete.");
+            
         }
 
         // create a new driver
@@ -273,7 +299,15 @@ namespace Tool
             }
             catch
             {
+                // close current browser to open a new one
                 Driver.Quit();
+
+                session.DevToolsEventReceived -= OnDevToolsEventReceived;
+                session.Dispose();
+
+                // restart the browser
+                CloseChromeProcess();
+
                 await Task.Delay(200);
 
                 numberRetries += 1;
@@ -367,5 +401,43 @@ namespace Tool
             using var csv = new CsvReader(reader, config);
             return csv.GetRecords<RedirectionModel>().ToList();
         }
+
+        // console event handler
+        private static bool ConsoleCtrlHandler(int ctrlType)
+        {
+            switch (ctrlType)
+            {
+                case 0: // CTRL_CLOSE_EVENT
+                case 2: // CTRL_C_EVENT
+                    Console.WriteLine("\nClosing application.\n");
+                    Driver?.Quit();
+                    CloseChromeProcess();
+                    Environment.Exit(0);
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        private static void CloseChromeProcess()
+        {
+            // get all chrome processes.
+            Process[] chromeProcesses = Process.GetProcessesByName("chrome");
+
+            // iterate through the Chrome processes and close them
+            foreach (Process process in chromeProcesses)
+            {
+                try
+                {
+                    // close the process
+                    process.Kill();
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error closing the Chrome process: {ex.Message}");
+                }
+            }
+        }
+
     }
 }
